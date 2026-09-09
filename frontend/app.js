@@ -1098,14 +1098,18 @@ function renderEntries() {
   $("#list-wrap").hidden = S.view !== "list";
   $("#gridview").hidden = S.view !== "grid";
 
-  if (!hasAny) {
+  if (!hasAny || filtered) {
+    // 空目录 / 无搜索结果：必须清空旧列表并隐藏表格，
+    // 否则残留上一个目录的内容，造成路径与显示不一致
+    $("#rows").innerHTML = "";
+    $("#gridview").innerHTML = "";
+    $("#list-wrap").hidden = true;
+    $("#gridview").hidden = true;
     emptyEl.hidden = false;
-    emptyEl.innerHTML = `<svg><use href="#i-folder"/></svg><div>此文件夹为空</div>`;
-    return;
-  }
-  if (filtered) {
-    emptyEl.hidden = false;
-    emptyEl.innerHTML = `<svg><use href="#i-search"/></svg><div>没有匹配的项目</div>`;
+    emptyEl.innerHTML = !hasAny
+      ? `<svg><use href="#i-folder"/></svg><div>此文件夹为空</div>`
+      : `<svg><use href="#i-search"/></svg><div>没有匹配的项目</div>`;
+    renderStatus();
     return;
   }
   emptyEl.hidden = true;
