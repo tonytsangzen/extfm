@@ -607,8 +607,9 @@ function getRecents() {
   catch { return []; }
 }
 function pushRecent(path) {
-  const list = getRecents().filter((p) => p !== path);
-  list.unshift(path);
+  /* 稳定排序：新文件插入最前；重复打开不改变已有顺序 */
+  const list = getRecents();
+  if (!list.includes(path)) list.unshift(path);
   localStorage.setItem("e2fs.recent", JSON.stringify(list.slice(0, 8)));
 }
 function renderRecents() {
