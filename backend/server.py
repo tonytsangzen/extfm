@@ -1056,12 +1056,37 @@ class Handler(BaseHTTPRequestHandler):
                 fs = bridge.open(path, writable=not (body.get("readOnly") or is_dev))
             except BridgeError as e:
                 msg = str(e)
-                if is_dev and ("not permitted" in msg.lower()
-                               or "permission denied" in msg.lower()):
+                low = msg.lower()
+                if is_dev and ("not permitted" in low or "permission denied" in low):
                     return self.send_json({"ok": False, "error": msg,
                                            "need_permission": True,
                                            "device": path})
-                raise
+                if is_dev and ("resource busy" in low or "ebusy" in low
+                               or "busy" in low):
+                    # 已被系统挂载：按需卸载后重试
+                    if body.get("unmount_first"):
+                        invalidate_topo_cache()
+                        rr = run_diskutil("unmount", path, timeout=60)
+                        out = ""
+                        if rr is not None:
+                            out = ((rr.stdout or b"") + (rr.stderr or b"")) \
+                                .decode("utf-8", "replace").strip()
+                        if rr is None or rr.returncode != 0:
+                            return self.send_json(
+                                {"ok": False, "busy": True, "device": path,
+                                 "error": f"卸载失败: {out or '系统拒绝卸载'}"},
+                                409)
+                        invalidate_topo_cache()
+                        fs = bridge.open(path, writable=False)   # 仍失败则向上抛
+                    else:
+                        meta = disk_topology_cached().get(path, {})
+                        return self.send_json(
+                            {"ok": False, "error": msg, "busy": True,
+                             "device": path,
+                             "content": meta.get("content", ""),
+                             "mount_point": meta.get("mount_point", "")})
+                else:
+                    raise
             app_state["pending"] = PendingFS(app_state["buffer_limit"])
             return self.send_json({"ok": True, "fs": fs,
                                    "writable": bridge.writable(),

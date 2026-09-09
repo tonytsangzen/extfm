@@ -624,13 +624,13 @@ function renderRecents() {
     el.addEventListener("click", () => openDevice(el.dataset.path)));
 }
 
-async function openDevice(path, retryAfterElevate = false) {
+async function openDevice(path, opts = {}) {
   if (!path) return;
   const btn = $("#btn-open");
   const ro = $("#open-ro")?.checked || path.startsWith("/dev/");
-  if (retryAfterElevate) btn && (btn.textContent = "打开中…");
   try {
-    const data = await apiPost("/api/open", {path, readOnly: ro});
+    const data = await apiPost("/api/open",
+      {path, readOnly: ro, unmountFirst: !!opts.unmountFirst});
     S.fs = data.fs;
     S.version = data.version || "";
     S.hist = [];
@@ -647,25 +647,44 @@ async function openDevice(path, retryAfterElevate = false) {
     renderDeviceCard();
     await navigate("/", {reset: true});
     await updateInfo();
-    renderFav();
     refreshSidebarMounts();
     if (!S.fs.writable)
       toast(ro ? "已按只读方式打开（块设备始终只读访问）"
                : "文件系统不可写，已只读打开");
   } catch (e) {
-    if (e.payload && e.payload.need_permission && !retryAfterElevate) {
+    const p = e.payload || {};
+    if (p.need_permission && !opts.retryAfterElevate) {
       const ok = await confirmDialog(
         "需要授权读取块设备",
-        `访问 ${path} 需要管理员授权。\n\n点击“授权”后将弹出系统密码框，` +
+        `访问 ${path} 需要管理员授权。\n点击“授权”后将弹出系统密码框，` +
         `仅授予该设备的只读权限（不修改任何数据）。是否继续？`,
         "授权并打开");
       if (ok) {
         try {
           await elevateDevices([path]);
-          return openDevice(path, true);
+          return openDevice(path, {retryAfterElevate: true});
         } catch (e2) {
           toast(`授权失败：${e2.message}`, true);
         }
+      }
+    } else if (p.busy) {
+      // 已被系统挂载：ext 分区 → 卸载后浏览；macOS 卷 → Finder 显示
+      const isLinux = (p.content || "").toLowerCase().includes("linux");
+      if (isLinux || !p.mount_point) {
+        const ok = await confirmDialog(
+          "设备已被系统挂载",
+          `要浏览该 ext 分区，需要先卸载系统挂载${p.mount_point ? "（当前挂载点 " + p.mount_point + "）" : ""}。\n是否卸载并打开？`,
+          "卸载并打开");
+        if (ok) {
+          try {
+            return openDevice(path, {unmountFirst: true});
+          } catch (e2) {
+            toast(`打开失败：${e2.message}`, true);
+          }
+        }
+      } else {
+        toast("该卷是 macOS 文件系统（非 ext），已在 Finder 中显示");
+        revealPath(p.mount_point || path);
       }
     } else {
       toast(`打开失败：${e.message}`, true);
@@ -678,158 +697,6 @@ async function openDevice(path, retryAfterElevate = false) {
   }
 }
 
-async function doScan(auto = false) {
-  const btn = $("#btn-scan");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading"></span>扫描中…';
-  try {
-    const data = await apiGet("/api/scan");
-    renderScan(data, auto);
-  } catch (e) {
-    if (!auto) toast(`扫描失败：${e.message}`, true);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<svg><use href="#i-search"/></svg>扫描设备与镜像';
-  }
-}
-
-function typeBadge(r) {
-  if (r.ok) return `<span class="badge">${esc(r.fstype)}</span>`;
-  if (r.denied) return `<span class="badge warn">需要授权</span>`;
-  const fs = r.content || r.host_fs || "";
-  return `<span class="badge dim">${esc(fs || "非 ext")}</span>`;
-}
-
-function stateBadge(r) {
-  if (r.mounted)
-    return `<span class="badge ok-mnt">已挂载${r.mount_point ? " · " + esc(r.mount_point) : ""}</span>`;
-  return `<span class="badge dim">未挂载</span>`;
-}
-
-function deviceActions(r) {
-  if (!r.kind || r.kind !== "device") return "";
-  const acts = [];
-  const linuxFs = (r.content || "").toLowerCase().includes("linux") || r.ok;
-  if (r.mounted) {
-    acts.push(`<button class="mini" data-act="unmount" data-dev="${esc(r.path)}">卸载</button>`);
-  } else if (!linuxFs) {
-    acts.push(`<button class="mini" data-act="mount" data-dev="${esc(r.path)}">挂载</button>`);
-    acts.push(`<button class="mini" data-act="mount-ro" data-dev="${esc(r.path)}">只读挂载</button>`);
-  } else {
-    acts.push(`<span class="badge dim" title="macOS 无 ext 内核驱动，无法挂载；可直接用本工具浏览">macOS 不能挂载 · 可用本工具浏览</span>`);
-  }
-  return `<div class="acts">${acts.join("")}</div>`;
-}
-
-function probeRow(r) {
-  const ok = r.ok;
-  const denied = r.denied;
-  const loc = r.kind === "device"
-    ? (r.removable ? `<span class="badge loc">可移动</span>` : `<span class="badge dim">内置</span>`)
-    : "";
-  const state = r.kind === "device" ? stateBadge(r) : "";
-  const nonExt = !ok && !denied && r.kind === "device" &&
-                 r.content && !r.content.toLowerCase().includes("linux");
-  const sub = ok
-    ? `${r.label ? r.label + " · " : ""}${r.uuid || ""}${r.capacity ? " · " + fmtBytes(r.capacity) : ""}`
-    : (denied ? "读取需要管理员授权"
-       : nonExt ? "非 ext 卷（macOS 文件系统，可执行挂载操作）"
-       : (r.error || ""));
-  const name = r.kind === "device" && r.volume_name ? `${esc(r.volume_name)} (${esc(baseName(r.path))})`
-    : esc(baseName(r.path));
-  return `<div class="probe-row" data-path="${esc(r.path)}">
-    <svg><use href="#${r.kind === "device" ? "i-hdd" : "i-disc"}"/></svg>
-    <div class="probe-main">
-      <div class="probe-name">${name}</div>
-      <div class="probe-sub">${esc(r.path)}${sub ? " — " + esc(sub) : ""}</div>
-    </div>
-    ${deviceActions(r)}
-    ${loc}${typeBadge(r)}${state}
-  </div>`;
-}
-
-function renderScan(data, auto = false) {
-  const wrap = $("#scan-wrap");
-  wrap.hidden = false;
-  const dv = $("#scan-devices");
-  const im = $("#scan-images");
-
-  const rem = data.devices.filter((r) => r.removable);
-  const internal = data.devices.filter((r) => !r.removable);
-  const deniedDevs = data.devices.filter((r) => r.denied);
-
-  let html = "";
-  if (rem.length)
-    html += `<div class="group-h">可移动设备 / 外置介质</div>` + rem.map(probeRow).join("");
-  if (internal.length)
-    html += `<div class="group-h">内置磁盘</div>` + internal.map(probeRow).join("");
-  if (!data.devices.length)
-    html += `<div class="group-h">未发现块设备</div>`;
-  dv.innerHTML = html;
-
-  im.innerHTML = data.images.length
-    ? `<div class="group-h">磁盘镜像文件</div>` + data.images.map(probeRow).join("")
-    : "";
-
-  // 权限横幅：一次授权全部被拒设备
-  const banner = $("#perm-banner");
-  if (deniedDevs.length) {
-    banner.hidden = false;
-    $("#perm-text").textContent =
-      `${deniedDevs.length} 个块设备无法读取 —— 授权后即可浏览（将弹出系统密码框，仅授予只读权限）`;
-    $("#btn-perm").dataset.devs = JSON.stringify(deniedDevs.map((r) => r.path));
-  } else {
-    banner.hidden = true;
-  }
-
-  const n = data.devices.filter((r) => r.ok).length + data.images.length;
-  $("#scan-note").textContent = n ? `发现 ${n} 个可打开的 ext 目标` : "未发现可打开的 ext 文件系统";
-  wrap.querySelectorAll(".probe-row").forEach((el) =>
-    el.addEventListener("click", (ev) => {
-      if (ev.target.closest("button")) return;
-      openDevice(el.dataset.path);
-    }));
-  wrap.querySelectorAll(".mini").forEach((el) =>
-    el.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      mountAction(el.dataset.act, el.dataset.dev);
-    }));
-}
-
-async function mountAction(act, device) {
-  if (!device) return;
-  const readOnly = act === "mount-ro";
-  try {
-    let d;
-    if (act === "unmount") {
-      d = await apiPost("/api/unmount", {device});
-    } else {
-      d = await apiPost("/api/mount", {device, readOnly});
-    }
-    if (d.ok) {
-      toast(act === "unmount"
-        ? `已卸载 ${baseName(device)}`
-        : `已${readOnly ? "只读" : ""}挂载 ${baseName(device)}${d.mount_point ? " → " + d.mount_point : ""}`);
-    } else {
-      toast(d.output || "操作失败", true);
-    }
-    doScan(true);
-  } catch (e) {
-    toast(e.message, true);
-  }
-}
-
-async function elevateDevices(devices) {
-  const d = await apiPost("/api/elevate", {devices});
-  const good = (d.results || []).filter((r) => r.ok).length;
-  toast(`已授权 ${good} 个设备`);
-  doScan(true);
-  return good;
-}
-
-/* ------------------------------------------------------------------ */
-/* 侧栏                                                                */
-/* ------------------------------------------------------------------ */
 function renderDeviceCard() {
   const fs = S.fs;
   const used = fs.capacity - fs.free_bytes;
