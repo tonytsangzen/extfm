@@ -811,7 +811,8 @@ async function refreshSidebarMounts() {
     const cur = S.fs ? S.fs.device : null;
     const devs = (d.devices || []).filter((r) => r.path !== cur);
     const mounted = devs.filter((r) => r.mounted);
-    const mountable = devs.filter((r) => !r.mounted);
+    // 可挂载分组只保留 ext2/3/4 设备（ok=探测为 ext；denied=需授权后才能确认）
+    const mountable = devs.filter((r) => !r.mounted && (r.ok || r.denied));
     let html = "";
     if (mounted.length)
       html += `<div class="side-sub">已挂载</div>` + mounted.map(mountRow).join("");
