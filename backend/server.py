@@ -1138,6 +1138,18 @@ class Handler(BaseHTTPRequestHandler):
             body = self.read_body() if self.command == "POST" else {}
             return self.send_json({"ok": True, "job": save_job(body)})
 
+        if route == "/api/reveal":
+            body = self.read_body() if self.command == "POST" else {}
+            path = body.get("path") or self.q1("path")
+            if not path or not os.path.exists(path):
+                return self.send_error_json("路径不存在")
+            opener = "/usr/bin/open" if sys.platform == "darwin" else "xdg-open"
+            try:
+                subprocess.run([opener, path], check=False, timeout=30)
+            except FileNotFoundError:
+                return self.send_error_json(f"找不到 {opener}")
+            return self.send_json({"ok": True, "path": path})
+
         if route == "/api/job":
             jid = self.q1("id") or ""
             with JOBS_LOCK:

@@ -848,6 +848,11 @@ function renderDeviceCard() {
       ejectSession();
     });
   }
+  const row = $("#side-device");
+  if (row && !row.dataset.bound) {
+    row.dataset.bound = "1";
+    row.addEventListener("click", () => S.fs && navigate("/"));
+  }
 }
 
 function mountRow(r) {
@@ -1152,17 +1157,24 @@ function entryByName(name) {
   return S.entries.find((e) => e.name === name);
 }
 
+function updateSelectionDom() {
+  document.querySelectorAll("#rows tr[data-name], #gridview .tile[data-name]")
+    .forEach((el) => el.classList.toggle("selected", S.selSet.has(el.dataset.name)));
+}
+
 function bindItemEvents(container, selector) {
   container.querySelectorAll(selector).forEach((el) => {
     const name = el.dataset.name;
     el.addEventListener("click", (ev) => {
       if (ev.metaKey || ev.ctrlKey) {
         S.selSet.has(name) ? S.selSet.delete(name) : S.selSet.add(name);
+      } else if (S.selSet.has(name)) {
+        return;   // 已选中：不动 DOM，保证双击可用
       } else {
         S.selSet.clear();
         S.selSet.add(name);
       }
-      renderEntries();
+      updateSelectionDom();
       renderStatus();
     });
     el.addEventListener("dblclick", () => activateEntry(entryByName(name)));
@@ -1171,7 +1183,7 @@ function bindItemEvents(container, selector) {
       if (!S.selSet.has(name)) {
         S.selSet.clear();
         S.selSet.add(name);
-        renderEntries();
+        updateSelectionDom();
         renderStatus();
       }
       showCtxMenu(ev.clientX, ev.clientY, entryByName(name));
@@ -1549,9 +1561,8 @@ function bindEvents() {
     showCtxMenu(ev.clientX, ev.clientY, {name: ".", type: "dir"});
   });
   document.addEventListener("click", (ev) => {
-    // 点击空白处取消选择
     if (ev.target.closest("#content") && !ev.target.closest("tr") && !ev.target.closest(".tile")) {
-      if (S.selSet.size) { S.selSet.clear(); renderEntries(); renderStatus(); }
+      if (S.selSet.size) { S.selSet.clear(); updateSelectionDom(); renderStatus(); }
     }
   });
 
