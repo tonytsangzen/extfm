@@ -1274,40 +1274,43 @@ function showCtxMenu(x, y, e) {
   const items = [];
 
   if (isBg) {
-    if (S.clip.paths.length)
-      items.push({icon: "i-swap", label: "粘贴到当前文件夹", fn: () => doPaste()});
+    /* Finder：文件夹空白处右键 */
     if (canWrite)
-      items.push({icon: "i-folder", label: "新建文件夹", fn: newFolder});
-    items.push({icon: "i-refresh", label: "刷新", fn: () => navigate(S.path, {push: false})});
+      items.push({label: "新建文件夹", key: "⇧⌘N", fn: newFolder});
+    if (S.clip.paths.length)
+      items.push({label: "粘贴", key: "⌘V", fn: () => doPaste()});
+    items.push({sep: true});
+    items.push({label: "刷新", fn: () => navigate(S.path, {push: false})});
   } else {
+    /* Finder：条目右键 */
     if (e.type === "dir") {
-      items.push({icon: "i-folder", label: "打开", fn: () => navigate(p)});
+      items.push({label: "打开", fn: () => navigate(p)});
     } else {
-      items.push({icon: iconSymbol(e), label: "预览", fn: () => activateEntry(e)});
-      items.push({icon: "i-hdd", label: "用系统应用打开", fn: () => sysOpen(p)});
+      items.push({label: "打开", fn: () => sysOpen(p)});
+      items.push({label: "快速查看", key: "Space", fn: () => openPreviewPath(p)});
     }
-    if (e.type !== "dir") {
-      items.push({icon: "i-download", label: "下载", fn: () => download(p)});
-    }
-    items.push({icon: "i-edit", label: "复制路径", fn: () => {
-      navigator.clipboard?.writeText(p).then(() => toast("已复制路径"));
+    items.push({sep: true});
+    items.push({label: "剪切", key: "⌘X", fn: () => clipSet("cut")});
+    items.push({label: "拷贝", key: "⌘C", fn: () => clipSet("copy")});
+    if (e.type === "dir" && S.clip.paths.length)
+      items.push({label: "粘贴到该文件夹", key: "⌘V", fn: () => doPaste(p)});
+    items.push({sep: true});
+    items.push({label: "拷贝为路径名称", key: "⌥⌘C", fn: () => {
+      navigator.clipboard?.writeText(p).then(() => toast("已拷贝路径"));
     }});
     items.push({sep: true});
+    if (e.type !== "dir")
+      items.push({label: "下载", fn: () => download(p)});
     if (canWrite) {
-      items.push({icon: "i-file", label: "复制", fn: () => clipSet("copy")});
-      items.push({icon: "i-swap", label: "剪切", fn: () => clipSet("cut")});
-      if (e.type === "dir" && S.clip.paths.length)
-        items.push({icon: "i-swap", label: "粘贴到该文件夹", fn: () => doPaste(p)});
-      items.push({icon: "i-edit", label: "重命名", fn: () => startRename(e)});
-      items.push({sep: true});
+      items.push({label: "重新命名", key: "F2", fn: () => startRename(e)});
     }
-    items.push({icon: "i-info", label: "显示简介", fn: () => openProps(p)});
+    items.push({label: "显示简介", key: "⌘I", fn: () => openProps(p)});
   }
 
   menu.innerHTML = items.map((it, i) => it.sep
     ? `<div class="sep"></div>`
-    : `<div class="item ${it.label === "剪切" && !canWrite ? "dim" : ""}"
-         data-i="${i}"><svg><use href="#${it.icon}"/></svg>${it.label}</div>`).join("");
+    : `<div class="item ${it.dim ? "dim" : ""}" data-i="${i}"><span>${it.label}</span>`
+      + (it.key ? `<span class="key">${it.key}</span>` : "") + `</div>`).join("");
   menu.hidden = false;
   menu.querySelectorAll(".item").forEach((el) =>
     el.addEventListener("click", () => { hideCtxMenu(); items[+el.dataset.i].fn(); }));
@@ -1315,6 +1318,23 @@ function showCtxMenu(x, y, e) {
   const mw = menu.offsetWidth, mh = menu.offsetHeight;
   menu.style.left = Math.min(x, innerWidth - mw - 8) + "px";
   menu.style.top = Math.min(y, innerHeight - mh - 8) + "px";
+}
+
+/* 快速查看：直接预览选中项 */
+function quickLookSelected() {
+  if (S.selSet.size !== 1) return;
+  const e = entryByName([...S.selSet][0]);
+  if (e && e.type !== "dir") activateEntry(e);
+}
+
+async function openPreviewPath(p) {
+  try {
+    const st = await apiGet(`/api/stat?path=${encodeURIComponent(p)}`);
+    if (st.resolved && st.resolved.type === "dir") return navigate(p);
+    openPreview(p, st);
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 function download(path) {
