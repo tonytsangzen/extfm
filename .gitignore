@@ -1,0 +1,16 @@
+# 构建产物
+build/
+tmp/
+
+# 生成的测试镜像（tests/make_images.sh 可重新生成）
+images/*.img
+
+# 运行日志
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ext 文件系统浏览器</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='2' y='4' width='20' height='16' rx='3' fill='%230a6cff'/><text x='12' y='16' font-size='9' fill='white' text-anchor='middle' font-family='monospace'>ext</text></svg>">
+</head>
+<body>
+
+<!-- ======================== SVG 图标库 ======================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="g-folder" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7cc0ff"/><stop offset="1" stop-color="#3f9bf7"/>
+    </linearGradient>
+  </defs>
+  <symbol id="i-folder" viewBox="0 0 24 24">
+    <path fill="url(#g-folder)" d="M3 6.2C3 5 4 4 5.2 4h4.1c.6 0 1.2.25 1.6.7L12.3 6H19a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2H5.2A2.2 2.2 0 0 1 3 17.6V6.2z"/>
+    <path fill="#fff" opacity=".25" d="M3 9h18v1H3z"/>
+  </symbol>
+  <symbol id="i-file" viewBox="0 0 24 24">
+    <path fill="#fff" stroke="#b9b9c0" stroke-width="1.1" d="M6 3.8h8L19 8.6v11.6a1.6 1.6 0 0 1-1.6 1.6H6a1.6 1.6 0 0 1-1.6-1.6V5.4C4.4 4.5 5.1 3.8 6 3.8z"/>
+    <path fill="#e4e4ea" d="M14 3.8 19 8.6h-4.2A.8.8 0 0 1 14 7.8V3.8z"/>
+  </symbol>
+  <symbol id="i-text" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <g stroke="#9aa4b0" stroke-width="1.3" stroke-linecap="round">
+      <path d="M7.5 11.5h9M7.5 14h9M7.5 16.5h6"/>
+    </g>
+  </symbol>
+  <symbol id="i-code" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <g fill="none" stroke="#7a67c8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m9.5 11.5-2.3 2.3 2.3 2.3M14.5 11.5l2.3 2.3-2.3 2.3"/>
+    </g>
+  </symbol>
+  <symbol id="i-image" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <rect x="7" y="11" width="10" height="7.4" rx="1" fill="#57b378"/>
+    <circle cx="10" cy="13.4" r="1" fill="#fff"/>
+    <path fill="#7ed09d" d="m8.2 18.4 2.4-3 1.9 2.1 1.5-1.6 2.1 2.5z"/>
+  </symbol>
+  <symbol id="i-binary" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <text x="8.2" y="16.9" font-size="6.4" fill="#5b6470" font-family="ui-monospace,monospace" font-weight="700">01</text>
+  </symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <g fill="#c98a3d"><rect x="9.4" y="4.4" width="2.1" height="16.8"/><rect x="9.4" y="9.4" width="2.1" height="1.6"/><rect x="9.4" y="12.6" width="2.1" height="1.6"/></g>
+  </symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <path fill="#4f8fd6" d="M10 17.2v-5l4-.9v5a1.7 1.7 0 1 1-1-1.5v-2l-2 .5v4a1.7 1.7 0 1 1-1-1.5z"/>
+  </symbol>
+  <symbol id="i-video" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <rect x="7" y="11.4" width="10" height="7" rx="1.2" fill="#c76a6a"/>
+    <path fill="#fff" d="m10.8 13.4 3.2 1.6-3.2 1.6z"/>
+  </symbol>
+  <symbol id="i-link" viewBox="0 0 24 24">
+    <use href="#i-file"/>
+    <path fill="none" stroke="#3c8ce7" stroke-width="1.6" stroke-linecap="round" d="M9 14.6 14.8 9.4M10.4 8.9l1.4-1.4a2.5 2.5 0 0 1 3.5 3.5l-1.4 1.4M13.4 15.1 12 16.5a2.5 2.5 0 0 1-3.5-3.5l1.4-1.4"/>
+  </symbol>
+  <symbol id="i-hdd" viewBox="0 0 24 24">
+    <rect x="2.8" y="5" width="18.4" height="14" rx="2.4" fill="#8e96a3"/>
+    <rect x="2.8" y="5" width="18.4" height="9" rx="2.4" fill="#aab2bf"/>
+    <circle cx="17.2" cy="16.4" r="1.3" fill="#65d67b"/>
+    <rect x="5.4" y="15.6" width="7" height="1.6" rx=".8" fill="#e8eaee"/>
+  </symbol>
+  <symbol id="i-disc" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" fill="#9aa3b2"/>
+    <circle cx="12" cy="12" r="5.6" fill="#c3cad6"/>
+    <circle cx="12" cy="12" r="1.9" fill="#f2f4f8" stroke="#8a93a3"/>
+    <path fill="#fff" opacity=".35" d="M12 3a9 9 0 0 1 8.6 6.3l-2 .6A6.9 6.9 0 0 0 12 5z"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="5.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m15.3 15.3 4.2 4.2"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5.5 14.5 12 8l6.5 6.5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M18.4 9.5A7 7 0 1 0 19 12"/><path fill="currentColor" d="M19.8 4.9v4.8h-4.8z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><g fill="currentColor"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></g></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></g></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m6.5 6.5 11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M12 4v10.5m0 0 4-4m-4 4-4-4M5 19h14"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M11.2 10.4h1.7v7h-1.7zM11.2 7h1.7v1.8h-1.7z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path fill="#f5b942" d="M12 3.6 21.4 20H2.6L12 3.6z"/><path d="M11 10h2v5h-2zM11 16.2h2V18h-2z" fill="#5a4210"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10 6.5 5.5 5.5L10 17.5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m14.5 5.5 4 4L8.5 19.5l-4.6 1 1-4.6z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m4.5 11 7.5-6.5L19.5 11v8a1.4 1.4 0 0 1-1.4 1.4H5.9A1.4 1.4 0 0 1 4.5 19v-8z"/></symbol>
+  <symbol id="i-home-c" viewBox="0 0 24 24">
+    <path fill="#4a9df8" d="M12 3.4 3.5 10.7a1.05 1.05 0 0 0 1.35 1.6l.35-.3V19a1.7 1.7 0 0 0 1.7 1.7h3.3v-4.3a1.8 1.8 0 0 1 3.6 0v4.3h3.3A1.7 1.7 0 0 0 19.15 19v-7l.35.3a1.05 1.05 0 0 0 1.35-1.6L12 3.4z"/>
+  </symbol>
+  <symbol id="i-clock-c" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.8" fill="url(#g-clock)"/>
+    <path d="M12 7.4v4.6l3.3 1.9" stroke="#fff" stroke-width="1.9" fill="none" stroke-linecap="round"/>
+    <defs>
+      <linearGradient id="g-clock" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#9b8bfb"/><stop offset="1" stop-color="#7a68e8"/>
+      </linearGradient>
+    </defs>
+  </symbol>
+  <symbol id="i-eject" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12 5.2 18.6 13H5.4L12 5.2z"/>
+    <rect x="5.4" y="15.4" width="13.2" height="2.6" rx="1.1" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.9 1.9M7.4 16.6l-1.9 1.9M18.5 18.5l-1.9-1.9M7.4 7.4 5.5 5.5"/>
+  </symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24">
+    <rect x="3.2" y="4.5" width="17.6" height="15" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path fill="currentColor" d="M3.2 6.9a2.4 2.4 0 0 1 2.4-2.4h5.2v15H5.6a2.4 2.4 0 0 1-2.4-2.4V6.9z"/>
+  </symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24">
+    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
+          d="M12 3.2 19.5 6v5.4c0 4.6-3.1 8-7.5 9.4C7.6 19.4 4.5 16 4.5 11.4V6L12 3.2z"/>
+    <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
+          d="m8.6 12 2.4 2.4 4.4-4.6"/>
+  </symbol>
+  <symbol id="i-save" viewBox="0 0 24 24">
+    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
+          d="M4.5 6.5 6.5 4.5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11z"/>
+    <path fill="currentColor" d="M8 4.8h8v4.4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V4.8z"/>
+    <rect x="7.4" y="12.6" width="9.2" height="6.6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  </symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M4 8.5h13m0 0-3.4-3.4M17 8.5l-3.4 3.4M20 15.5H7m0 0 3.4-3.4M7 15.5l3.4 3.4"/></symbol>
+</svg>
+
+<!-- ======================== 启动页（打开设备/镜像） ======================== -->
+<div id="launch">
+  <div class="launch-inner">
+    <div class="hero">
+      <svg class="hero-icon"><use href="#i-disc"/></svg>
+      <h1>Ext 文件系统浏览器</h1>
+      <p>基于 e2fsprogs libext2fs · ext2 / ext3 / ext4 · 镜像可读写 · 块设备只读浏览</p>
+    </div>
+
+    <div class="card open-card">
+      <div class="open-row">
+        <input id="open-path" type="text" spellcheck="false"
+               placeholder="/dev/diskNsM 或 镜像文件路径，如 images/ext4.img">
+        <button id="btn-open" class="primary">打开</button>
+      </div>
+      <div class="open-hints">
+        <button id="btn-scan" class="ghost">
+          <svg><use href="#i-search"/></svg>扫描设备与镜像
+        </button>
+        <label class="ro-toggle" title="不尝试写权限，完全只读打开">
+          <input type="checkbox" id="open-ro">只读打开
+        </label>
+        <span class="hint">macOS 上访问真实磁盘通常需要 root 或“完全磁盘访问权限”</span>
+      </div>
+    </div>
+
+    <div id="recents-wrap" class="card" hidden>
+      <div class="card-title">最近打开</div>
+      <div id="recents" class="chips"></div>
+    </div>
+
+    <div id="scan-wrap" class="card" hidden>
+      <div class="card-title">扫描结果 <span id="scan-note"></span></div>
+      <div id="perm-banner" class="banner" hidden>
+        <svg><use href="#i-warn"/></svg>
+        <span id="perm-text"></span>
+        <button id="btn-perm" class="mini primary-mini">授予读取权限</button>
+      </div>
+      <div id="scan-devices"></div>
+      <div id="scan-images"></div>
+    </div>
+
+    <footer class="launch-foot">镜像文件可读写 · 块设备只读访问（写需卸载后用镜像操作） · libext2fs <span id="ver"></span></footer>
+  </div>
+</div>
+
+<!-- ======================== 文件管理器主界面 ======================== -->
+<div id="browser" hidden>
+  <header id="toolbar">
+    <button id="btn-sidebar" class="tool active" title="隐藏/显示边栏"><svg><use href="#i-sidebar"/></svg></button>
+    <div class="nav-group">
+      <button id="nav-back" class="tool" title="后退 (⌘←)"><svg><use href="#i-back"/></svg></button>
+      <button id="nav-fwd" class="tool" title="前进 (⌘→)"><svg><use href="#i-fwd"/></svg></button>
+      <button id="nav-up" class="tool" title="上级目录 (⌘↑)"><svg><use href="#i-up"/></svg></button>
+    </div>
+    <div class="spacer"></div>
+    <div id="tb-title" class="tb-title" title="当前位置">
+      <svg><use href="#i-folder"/></svg><span id="tb-name">—</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" id="view-toggle" title="视图">
+      <button data-view="list" class="active"><svg><use href="#i-list"/></svg></button>
+      <button data-view="grid"><svg><use href="#i-grid"/></svg></button>
+    </div>
+    <div class="tb-sep"></div>
+    <button id="btn-actions" class="tool" title="功能菜单"><svg><use href="#i-gear"/></svg></button>
+    <div class="searchbox">
+      <svg><use href="#i-search"/></svg>
+      <input id="search" type="text" placeholder="搜索" spellcheck="false">
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <div class="side-title">收藏</div>
+      <div id="side-fav"></div>
+      <div class="side-title">位置</div>
+      <div id="side-device" class="dev-row" title="点击前往根目录">
+        <svg><use href="#i-hdd"/></svg>
+        <div class="dev-info">
+          <div class="dev-name"><span id="dev-name">—</span>
+            <span id="dev-badge" class="badge"></span></div>
+          <div class="cap-bar mini"><div id="dev-cap"></div></div>
+        </div>
+        <button id="dev-eject" class="tri-btn" title="卸载（写回缓冲改动后关闭）">
+          <svg><use href="#i-eject"/></svg>
+        </button>
+      </div>
+      <div id="side-mounts"></div>
+    </aside>
+    <section id="content">
+      <div id="gone-banner" class="banner" hidden>
+        <svg><use href="#i-warn"/></svg>
+        <span>设备已被移除或卸载，缓冲改动无法写回。</span>
+        <button id="gone-close" class="mini">放弃改动并关闭</button>
+      </div>
+      <div id="list-wrap">
+        <table id="listview">
+          <thead>
+            <tr>
+              <th data-key="name" class="col-name">名称</th>
+              <th data-key="size" class="col-size">大小</th>
+              <th data-key="type" class="col-type">种类</th>
+              <th data-key="mtime" class="col-time">修改日期</th>
+              <th data-key="perms" class="col-perms">权限</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div id="gridview" hidden></div>
+      <div id="empty" class="empty" hidden></div>
+    </section>
+  </div>
+
+  <footer id="pathbar">
+    <button id="path-refresh" class="tool small" title="刷新"><svg><use href="#i-refresh"/></svg></button>
+    <div id="breadcrumb" title="点击路径段跳转；拖放文件到路径段可移动/复制"></div>
+    <button id="btn-edit-path" class="tool small" title="编辑路径 (⌘⇧G)"><svg><use href="#i-edit"/></svg></button>
+  </footer>
+  <footer id="statusbar">
+    <span id="st-left"></span>
+    <span class="spacer"></span>
+    <span id="st-right"></span>
+  </footer>
+</div>
+
+<!-- ======================== 弹窗 / 菜单 ======================== -->
+<div id="modal-mask" hidden>
+  <div id="preview" class="modal" hidden>
+    <div class="modal-head">
+      <svg id="pv-icon"><use href="#i-file"/></svg>
+      <div class="pv-title">
+        <div id="pv-name"></div>
+        <div id="pv-meta" class="muted"></div>
+      </div>
+      <button class="tool" id="pv-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div id="pv-body"></div>
+    <div class="modal-foot">
+      <span id="pv-note" class="muted"></span>
+      <span class="spacer"></span>
+      <button class="ghost" id="pv-download"><svg><use href="#i-download"/></svg>下载</button>
+    </div>
+  </div>
+
+  <div id="props" class="modal narrow" hidden>
+    <div class="modal-head">
+      <svg><use href="#i-info"/></svg>
+      <div class="pv-title"><div>显示简介</div><div id="pr-path" class="muted"></div></div>
+      <button class="tool" id="pr-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div id="pr-body"></div>
+  </div>
+
+  <div id="confirm" class="modal narrow" hidden>
+    <div class="modal-head">
+      <svg><use href="#i-warn"/></svg>
+      <div class="pv-title"><div id="cf-title">确认</div></div>
+    </div>
+    <div id="cf-body" class="cf-body"></div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button class="ghost" id="cf-cancel">取消</button>
+      <button class="primary" id="cf-ok">确定</button>
+    </div>
+  </div>
+
+  <div id="dlg-check" class="modal narrow" hidden>
+    <div class="modal-head">
+      <svg><use href="#i-shield"/></svg>
+      <div class="pv-title"><div>文件系统检查</div><div id="ck-target" class="muted"></div></div>
+      <button class="tool dlg-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="dlg-body">
+      <label class="radio-row"><input type="radio" name="ck-mode" value="ro" checked>
+        <span>只读检查（e2fsck -fn，不做任何修改）</span></label>
+      <label class="radio-row"><input type="radio" name="ck-mode" value="repair">
+        <span>检查并自动修复（-y，期间会关闭并重新打开文件系统）</span></label>
+      <pre id="ck-out" class="job-out" hidden></pre>
+    </div>
+    <div class="modal-foot">
+      <span id="ck-status" class="muted"></span><span class="spacer"></span>
+      <button class="primary" id="ck-run">开始检查</button>
+    </div>
+  </div>
+
+  <div id="dlg-format" class="modal narrow" hidden>
+    <div class="modal-head">
+      <svg><use href="#i-disc"/></svg>
+      <div class="pv-title"><div>格式化</div><div class="muted">mke2fs · 所有数据将被清空</div></div>
+      <button class="tool dlg-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label>目标</label>
+        <input id="ft-target" type="text" spellcheck="false">
+        <label>类型</label>
+        <select id="ft-type">
+          <option value="ext4" selected>ext4</option>
+          <option value="ext3">ext3</option>
+          <option value="ext2">ext2</option>
+        </select>
+        <label>块大小</label>
+        <select id="ft-bs">
+          <option value="1024">1024 B</option>
+          <option value="2048">2048 B</option>
+          <option value="4096" selected>4096 B</option>
+        </select>
+        <label>卷标</label>
+        <input id="ft-label" type="text" maxlength="16" placeholder="（可选）">
+        <label>UUID</label>
+        <input id="ft-uuid" type="text" placeholder="（留空 = 随机生成）" spellcheck="false">
+        <label>inode 大小</label>
+        <select id="ft-isize">
+          <option value="">默认</option>
+          <option value="128">128 B（旧系统，2038 年问题）</option>
+          <option value="256" selected>256 B</option>
+          <option value="512">512 B</option>
+        </select>
+        <label>保留块 %</label>
+        <input id="ft-reserved" type="number" min="0" max="50" value="5">
+        <label>新建空镜像</label>
+        <div class="ft-new">
+          <input id="ft-newfile" type="checkbox">
+          <input id="ft-size" type="number" min="1" value="64" style="width:80px"> MB
+        </div>
+      </div>
+      <details class="feat-details">
+        <summary>文件系统特性（-O）</summary>
+        <div id="ft-features" class="feat-grid"></div>
+      </details>
+      <pre id="ft-out" class="job-out" hidden></pre>
+    </div>
+    <div class="modal-foot">
+      <span id="ft-status" class="muted"></span><span class="spacer"></span>
+      <button class="primary danger" id="ft-run">格式化</button>
+    </div>
+  </div>
+
+  <div id="dlg-save" class="modal narrow" hidden>
+    <div class="modal-head">
+      <svg><use href="#i-save"/></svg>
+      <div class="pv-title"><div>保存到其他磁盘 / 文件</div><div id="sv-source" class="muted"></div></div>
+      <button class="tool dlg-close"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="dlg-body">
+      <label class="radio-row"><input type="radio" name="sv-mode" value="saveas" checked>
+        <span>另存为副本：把当前文件系统（连同缓冲中的改动）写入目标，<b>原盘保持不变</b>，当前会话继续保留缓冲</span></label>
+      <label class="radio-row"><input type="radio" name="sv-mode" value="clone">
+        <span>完整克隆：先把缓冲改动写回原盘，再做逐字节克隆</span></label>
+      <div class="form-grid" style="margin-top:10px">
+        <label>目标路径</label>
+        <input id="sv-target" type="text" spellcheck="false" placeholder="/path/to/copy.img 或 /dev/diskNsM">
+        <label>覆盖已存在</label>
+        <input id="sv-force" type="checkbox">
+      </div>
+      <div class="progress" id="sv-progress" hidden><div id="sv-bar"></div></div>
+      <pre id="sv-out" class="job-out" hidden></pre>
+    </div>
+    <div class="modal-foot">
+      <span id="sv-status" class="muted"></span><span class="spacer"></span>
+      <button class="primary" id="sv-run">开始保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="ctxmenu" hidden></div>
+<div id="dropdown" class="menu" hidden></div>
+<div id="toasts"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

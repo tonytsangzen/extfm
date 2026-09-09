@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Build & Test (macOS)
+    runs-on: macos-14
+    timeout-minutes: 40
+    env:
+      E2FS: ${{ github.workspace }}/e2fsprogs
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache e2fsprogs build
+        uses: actions/cache@v4
+        id: e2fs-cache
+        with:
+          path: ${{ github.workspace }}/e2fsprogs
+          key: e2fsprogs-v1.47.3-macos-14
+
+      - name: Build e2fsprogs 1.47.3
+        if: steps.e2fs-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.47.3 \
+            https://github.com/tytso/e2fsprogs.git "$E2FS"
+          cd "$E2FS"
+          ./configure
+          make -j3
+
+      - name: Verify e2fsprogs build tree
+        run: |
+          test -f "$E2FS/lib/libext2fs.a"
+          test -x "$E2FS/misc/mke2fs"
+          test -x "$E2FS/debugfs/debugfs"
+          test -x "$E2FS/e2fsck/e2fsck"
+          "$E2FS/misc/mke2fs" -V
+
+      - name: Build (bridge dylib / tests / native window)
+        run: make all
+
+      - name: Generate test images
+        run: make images
+
+      - name: Read-only smoke tests
+        run: make test
+
+      - name: Write tests (buffered ops + e2fsck verification)
+        run: make test-write
+
+      - name: Backend smoke run (REST API)
+        run: |
+          B=http://127.0.0.1:8799
+          python3 backend/server.py --port 8799 --open images/ext4.img \
+            > server-smoke.log 2>&1 &
+          SPID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8799/api/info >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:8799/api/info | grep -q '"open": true'
+          curl -sf "http://127.0.0.1:8799/api/list?path=/" | grep -q '"ok": true'
+          curl -sf "$B/api/stat?path=/docs" | grep -q '"ok": true'
+          kill $SPID
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            server-smoke.log
+            build/server.log
+          if-no-files-found: ignore
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
