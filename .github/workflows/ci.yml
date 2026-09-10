@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 40
     env:
       E2FS: ${{ github.workspace }}/e2fsprogs
+      E2FSPROGS_BIN: ${{ github.workspace }}/e2fsprogs
     steps:
       - name: Checkout project
         uses: actions/checkout@v4

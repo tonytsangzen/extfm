@@ -565,14 +565,22 @@ JOBS_LOCK = threading.Lock()
 
 
 def find_tool(tool: str):
-    """定位 e2fsprogs 工具：环境变量 → 源码树 → PATH"""
+    """定位 e2fsprogs 工具：环境变量 → 常见源码树/安装位置 → PATH"""
     env = os.environ.get(f"{tool.upper()}_BIN")
     if env and os.path.exists(env):
         return env
-    root = os.environ.get("E2FSPROGS_BIN", str(Path.home() / "e2fsprogs"))
-    for cand in (f"{root}/{tool}/{tool}", f"{root}/misc/{tool}"):
-        if os.path.exists(cand):
-            return cand
+    roots = [os.environ.get("E2FSPROGS_BIN"),
+             str(BASE.parent / "e2fsprogs"),
+             str(Path.home() / "e2fsprogs"),
+             "/usr/local", "/opt/homebrew/opt/e2fsprogs", "/usr"]
+    subdirs = ("misc", "sbin", "bin", "e2fsck", "")
+    for root in roots:
+        if not root:
+            continue
+        for sub in subdirs:
+            cand = os.path.join(root, sub, tool)
+            if sub and os.path.isfile(cand):
+                return cand
     import shutil
     return shutil.which(tool)
 
@@ -1128,7 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 flushed = 0
             bridge.close()
-            app_state["pending"] = None
+            app_state["pending"] = PendingFS(app_state["buffer_limit"])
             return self.send_json({"ok": True, "flushed": flushed,
                                    "discarded": bool(body.get("discard"))})
 

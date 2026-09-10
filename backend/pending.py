@@ -110,7 +110,7 @@ class PendingFS:
             return False
 
     def dir_names(self, path: str, bridge) -> set:
-        """缓冲视图中 path 目录下已占用的名字（真实 + 虚拟）"""
+        """缓冲视图中 path 目录下已占用的名字（按日志顺序应用全部操作）"""
         names = set()
         kind, v = self.resolve(path)
         if kind == "real":
@@ -118,12 +118,24 @@ class PendingFS:
                 names |= {e["name"] for e in bridge.list(v)["entries"]}
             except Exception:
                 pass
+
+        def pname(op_path):
+            return self.parent(op_path)
+
         for op in self.ops:
             if op["op"] == "mkdir":
-                if self.parent(op["path"]) == path:
+                if pname(op["path"]) == path:
                     names.add(self.name(op["path"]))
-            elif op["op"] in ("copy", "rename"):
-                if self.parent(op["new"]) == path:
+            elif op["op"] == "delete":
+                if pname(op["path"]) == path:
+                    names.discard(self.name(op["path"]))
+            elif op["op"] == "rename":
+                if pname(op["old"]) == path:
+                    names.discard(self.name(op["old"]))
+                if pname(op["new"]) == path:
+                    names.add(self.name(op["new"]))
+            elif op["op"] == "copy":
+                if pname(op["new"]) == path:
                     names.add(self.name(op["new"]))
         return names
 
