@@ -40,11 +40,11 @@ images: $(BUILD)/libe2fsbridge.dylib
 	bash tests/make_images.sh
 
 # 桥接层冒烟测试
-test: $(BUILD)/bridge_test
+test: $(BUILD)/bridge_test | images
 	$(BUILD)/bridge_test images/ext4.img
 
 # 写操作测试（在临时镜像上执行，随后 e2fsck 校验一致性）
-test-write: $(BUILD)/write_test
+test-write: $(BUILD)/write_test | images
 	cp images/ext4.img $(BUILD)/wtest.img
 	$(BUILD)/write_test $(BUILD)/wtest.img
 	$(E2FS)/e2fsck/e2fsck -fn $(BUILD)/wtest.img
