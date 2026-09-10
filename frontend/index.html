@@ -135,7 +135,7 @@
     <div class="hero">
       <svg class="hero-icon"><use href="#i-disc"/></svg>
       <h1>Ext 文件系统浏览器</h1>
-      <p>基于 e2fsprogs libext2fs · ext2 / ext3 / ext4 · 镜像可读写 · 块设备只读浏览</p>
+      <p>基于 e2fsprogs libext2fs · ext2 / ext3 / ext4 · 镜像与块设备均可读写（默认）</p>
     </div>
 
     <div class="card open-card">
@@ -171,7 +171,7 @@
       <div id="scan-images"></div>
     </div>
 
-    <footer class="launch-foot">镜像文件可读写 · 块设备只读访问（写需卸载后用镜像操作） · libext2fs <span id="ver"></span></footer>
+    <footer class="launch-foot">块设备默认读写访问（系统已挂载的卷会引导卸载） · libext2fs <span id="ver"></span></footer>
   </div>
 </div>
 

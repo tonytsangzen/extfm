@@ -1074,9 +1074,8 @@ class Handler(BaseHTTPRequestHandler):
                         {"ok": False,
                          "error": f"切换前写回失败: {r.get('error')}"}, 409)
             is_dev = path.startswith("/dev/")
-            # 块设备始终只读访问（避免与宿主系统挂载状态冲突）
             try:
-                fs = bridge.open(path, writable=not (body.get("readOnly") or is_dev))
+                fs = bridge.open(path, writable=not body.get("readOnly"))
             except BridgeError as e:
                 msg = str(e)
                 low = msg.lower()
@@ -1100,7 +1099,8 @@ class Handler(BaseHTTPRequestHandler):
                                  "error": f"卸载失败: {out or '系统拒绝卸载'}"},
                                 409)
                         invalidate_topo_cache()
-                        fs = bridge.open(path, writable=False)   # 仍失败则向上抛
+                        fs = bridge.open(path,
+                                         writable=not body.get("readOnly"))  # 仍失败则向上抛
                     else:
                         meta = disk_topology_cached().get(path, {})
                         return self.send_json(
@@ -1215,9 +1215,11 @@ class Handler(BaseHTTPRequestHandler):
             bad = [d for d in devs if not DEV_PATH_RE.match(str(d))]
             if bad:
                 return self.send_error_json(f"非法设备路径: {bad}")
-            cmd = "chmod a+r " + " ".join(devs)
+            mode = "a+rw" if body.get("write") else "a+r"
+            action = "读写" if body.get("write") else "只读"
+            cmd = f"chmod {mode} " + " ".join(devs)
             script = (f'do shell script "{cmd}" with administrator privileges '
-                      f'with prompt "Ext 文件系统浏览器请求读取磁盘（仅授予只读权限）"')
+                      f'with prompt "Ext 文件系统浏览器请求{action}访问磁盘"')
             try:
                 r = subprocess.run(["/usr/bin/osascript", "-e", script],
                                    capture_output=True, text=True, timeout=300)

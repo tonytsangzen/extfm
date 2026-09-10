@@ -645,7 +645,7 @@ function renderRecents() {
 async function openDevice(path, opts = {}) {
   if (!path) return;
   const btn = $("#btn-open");
-  const ro = $("#open-ro")?.checked || path.startsWith("/dev/");
+  const ro = $("#open-ro")?.checked;
   try {
     const data = await apiPost("/api/open",
       {path, readOnly: ro, unmountFirst: !!opts.unmountFirst});
@@ -667,20 +667,23 @@ async function openDevice(path, opts = {}) {
     await updateInfo();
     refreshSidebarMounts();
     if (!S.fs.writable)
-      toast(ro ? "已按只读方式打开（块设备始终只读访问）"
-               : "文件系统不可写，已只读打开");
+      toast(ro ? "已按只读方式打开" : "文件系统不可写，已只读打开");
   } catch (e) {
     const p = e.payload || {};
     if (p.need_permission && !opts.retryAfterElevate) {
+      const ro = $("#open-ro")?.checked;
       const ok = await confirmDialog(
-        "需要授权读取块设备",
+        ro ? "需要授权读取块设备" : "需要授权读写块设备",
         `访问 ${path} 需要管理员授权。\n点击“授权”后将弹出系统密码框，` +
-        `仅授予该设备的只读权限（不修改任何数据）。是否继续？`,
+        (ro ? `仅授予该设备的只读权限。` : `授予该设备的读写权限。`) +
+        `\n是否继续？`,
         "授权并打开");
       if (ok) {
         try {
-          await elevateDevices([path]);
-          return openDevice(path, {retryAfterElevate: true});
+          await apiPost("/api/elevate",
+            {devices: [path], write: !ro});
+          toast("授权成功，正在打开…");
+          return openDevice(path, {retryAfterElevate: true, unmountFirst: opts.unmountFirst});
         } catch (e2) {
           toast(`授权失败：${e2.message}`, true);
         }
