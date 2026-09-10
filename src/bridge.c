@@ -1608,6 +1608,160 @@ out:
     return ret;
 }
 
+/* ---- 删除 ---- */
+
+static int release_blocks_proc(ext2_filsys fs EXT2FS_ATTR((unused)),
+                               blk64_t *blocknr,
+                               e2_blkcnt_t blockcnt EXT2FS_ATTR((unused)),
+                               blk64_t ref_block EXT2FS_ATTR((unused)),
+                               int ref_offset EXT2FS_ATTR((unused)),
+                               void *priv EXT2FS_ATTR((unused)))
+{
+    ext2fs_block_alloc_stats(fs, *blocknr, -1);
+    return 0;
+}
+
+/* 释放 inode 的数据块并注销统计（debugfs kill_file_by_inode 模式） */
+static errcode_t kill_inode_blocks(ext2_ino_t ino, struct ext2_inode *inode)
+{
+    errcode_t err;
+
+    inode->i_links_count = 0;   /* 彻底删除：链接数归零，避免 dtime 与链接并存 */
+    ext2fs_set_dtime(g_fs, inode);
+    err = ext2fs_write_inode(g_fs, ino, inode);
+    if (err)
+        return err;
+    if (ext2fs_inode_has_valid_blocks2(g_fs, inode))
+        err = ext2fs_block_iterate3(g_fs, ino, BLOCK_FLAG_READ_ONLY, NULL,
+                                    release_blocks_proc, NULL);
+    ext2fs_inode_alloc_stats2(g_fs, ino, -1, LINUX_S_ISDIR(inode->i_mode));
+    return err;
+}
+
+static errcode_t delete_dir_children(ext2_ino_t dir, int depth);
+
+static errcode_t delete_child(ext2_ino_t parent, const char *name,
+                              ext2_ino_t ino, int depth)
+{
+    struct ext2_inode ci;
+    errcode_t err;
+
+    if (ext2fs_read_inode(g_fs, ino, &ci))
+        return EXT2_ET_FILE_NOT_FOUND;
+    if (LINUX_S_ISDIR(ci.i_mode)) {
+        if (depth > 64)
+            return EXT2_ET_INVALID_ARGUMENT;
+        err = delete_dir_children(ino, depth + 1);
+        if (err)
+            return err;
+    }
+    err = kill_inode_blocks(ino, &ci);
+    if (err)
+        return err;
+    return ext2fs_unlink(g_fs, parent, name, 0, 0);
+}
+
+static errcode_t delete_dir_children(ext2_ino_t dir, int depth)
+{
+    struct name_list list;
+    errcode_t err;
+    int i;
+
+    if (depth > 64)
+        return EXT2_ET_INVALID_ARGUMENT;
+    err = collect_dir(dir, &list);
+    if (err)
+        return err;
+    for (i = 0; i < list.n; i++) {
+        err = delete_child(dir, list.v[i].name, list.v[i].ino, depth);
+        if (err)
+            break;
+    }
+    free_name_list(&list);
+    return err;
+}
+
+int e2b_delete(const char *path, int recursive, char **out_err)
+{
+    char *parent = NULL;
+    const char *name;
+    ext2_ino_t pd, ino;
+    struct ext2_inode inode, pinode;
+    errcode_t err;
+    int ret = -1;
+
+    pthread_mutex_lock(&g_lock);
+    if (ensure_writable(out_err))
+        goto out;
+    if (!path || !strcmp(path, "/")) {
+        set_err(out_err, "不能删除根目录");
+        goto out;
+    }
+    if (split_path(path, &parent, &name)) {
+        set_err(out_err, "路径不合法: %s", path);
+        goto out;
+    }
+    if (resolve_dir(parent, &pd)) {
+        set_err(out_err, "父目录不存在: %s", parent);
+        goto out;
+    }
+    if (ext2fs_lookup(g_fs, pd, name, strlen(name), NULL, &ino)) {
+        set_err(out_err, "源不存在: %s", path);
+        goto out;
+    }
+    if (ext2fs_read_inode(g_fs, ino, &inode)) {
+        set_err(out_err, "读取 inode 失败");
+        goto out;
+    }
+    if (LINUX_S_ISDIR(inode.i_mode)) {
+        /* 目录：非空且未指定递归时拒绝 */
+        if (!recursive) {
+            struct name_list l;
+            errcode_t lerr = collect_dir(ino, &l);
+            int n = lerr ? -1 : l.n;
+            free_name_list(&l);
+            if (n < 0) {
+                set_err(out_err, "检查目录内容失败");
+                goto out;
+            }
+            if (n > 0) {
+                set_err(out_err, "目录非空（需递归删除）");
+                goto out;
+            }
+        }
+        err = delete_dir_children(ino, 0);
+        if (err) {
+            set_err(out_err, "删除目录内容失败: %s", fs_strerror(err));
+            goto out;
+        }
+    }
+    err = ext2fs_unlink(g_fs, pd, name, 0, 0);
+    if (err) {
+        set_err(out_err, "移除目录项失败: %s", fs_strerror(err));
+        goto out;
+    }
+    err = kill_inode_blocks(ino, &inode);
+    if (err) {
+        set_err(out_err, "释放 inode 失败: %s", fs_strerror(err));
+        goto out;
+    }
+    if (LINUX_S_ISDIR(inode.i_mode) && pd != ino) {
+        if (ext2fs_read_inode(g_fs, pd, &pinode) == 0 &&
+            pinode.i_links_count > 1) {
+            pinode.i_links_count--;
+            ext2fs_write_inode(g_fs, pd, &pinode);
+        }
+    }
+    bump_dir_mtime(pd);
+    if (flush_fs(out_err) == 0)
+        ret = 0;
+out:
+    free(parent);
+    pthread_mutex_unlock(&g_lock);
+    return ret;
+}
+
+
 int e2b_mkdir(const char *path, char **out_err)
 {
     char *parent = NULL;

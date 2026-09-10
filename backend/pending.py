@@ -161,6 +161,20 @@ class PendingFS:
         self.removed.add(old)
         self.ops.append({"op": "rename", "old": old, "new": new})
 
+    def add_delete(self, path: str):
+        """删除进缓冲：视图立即隐藏该子树，写回时才真正从磁盘删除"""
+        self.ops.append({"op": "delete", "path": path})
+        self.removed.add(path)
+        for k in [k for k in self.entries
+                  if k == path or k.startswith(path + "/")]:
+            del self.entries[k]
+        for k in [k for k in self.blobs
+                  if k == path or k.startswith(path + "/")]:
+            del self.blobs[k]
+        for k in [k for k in self.prefix_maps
+                  if k == path or k.startswith(path + "/")]:
+            del self.prefix_maps[k]
+
     def add_copy(self, old: str, new: str, source_meta: dict, data: bytes | None):
         """data 非 None 表示常规文件内容已缓冲进内存；目录/符号链接只记录元数据"""
         kind, v = self.resolve(old)
@@ -234,6 +248,8 @@ class PendingFS:
             elif op["op"] == "copy" and self.parent(op["new"]) == path:
                 nm = self.name(op["new"])
                 names[nm] = self._synth_list_entry(op["new"], nm, bridge)
+            elif op["op"] == "delete" and self.parent(op["path"]) == path:
+                names.pop(self.name(op["path"]), None)
             elif op["op"] == "mkdir" and self.parent(op["path"]) == path:
                 nm = self.name(op["path"])
                 e = dict(self.entries.get(op["path"]) or {})

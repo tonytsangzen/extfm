@@ -55,6 +55,9 @@ int e2b_rename(const char *old_path, const char *new_path, char **out_err);
 /* 复制（文件/符号链接/目录递归；new 已存在则报错） */
 int e2b_copy(const char *old_path, const char *new_path, char **out_err);
 
+/* 删除（文件/符号链接/目录递归）。recursive=0 时非空目录报错 */
+int e2b_delete(const char *path, int recursive, char **out_err);
+
 /* 释放桥接层返回的缓冲区 */
 void e2b_free(void *p);
 

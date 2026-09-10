@@ -125,6 +125,14 @@ int main(int argc, char **argv)
     expect("move dir into own subtree rejected",
            e2b_rename("/submoved", "/submoved/deep", &err) != 0);
 
+    /* 删除：文件、递归目录 */
+    expect("delete file /data.bin", e2b_delete("/data.bin", 1, &err) == 0);
+    expect("deleted file gone", e2b_stat("/data.bin", &json, &err) != 0);
+    expect("delete dir /nested (recursive)", e2b_delete("/nested", 1, &err) == 0);
+    expect("deleted dir gone", e2b_stat("/nested", &json, &err) != 0);
+    expect("non-recursive delete of non-empty dir rejected",
+           e2b_delete("/copydst", 0, &err) != 0);
+
     expect("close", e2b_close() == 0);
     printf("\n%s (%d failures)\n", failures ? "WRITE TEST FAILED" : "ALL WRITE TESTS PASSED", failures);
     return failures ? 1 : 0;

@@ -391,6 +391,24 @@ function startRename(entry) {
   input.addEventListener("blur", () => finish(false));
 }
 
+async function deletePaths(paths) {
+  if (!paths.length) return;
+  if (!writable()) return toast("当前文件系统不可写", true);
+  const ok = await confirmDialog(
+    "删除",
+    `将永久删除 ${paths.length} 项（文件夹连同其全部内容一并删除）。` +
+    `写回磁盘后不可恢复。确定删除？`, "删除");
+  if (!ok) return;
+  try {
+    const d = await apiPost("/api/delete", {paths});
+    applyWriteResp(d);
+    toast(`已删除 ${d.deleted ?? paths.length} 项`);
+    await refreshAfterWrite([S.path]);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 async function newFolder() {
   if (!writable()) return toast("当前文件系统不可写", true);
   const names = new Set(S.entries.map((e) => e.name));
@@ -1301,10 +1319,11 @@ function showCtxMenu(x, y, e) {
     items.push({sep: true});
     if (e.type !== "dir")
       items.push({label: "下载", fn: () => download(p)});
-    if (canWrite) {
-      items.push({label: "重新命名", key: "F2", fn: () => startRename(e)});
-    }
     items.push({label: "显示简介", key: "⌘I", fn: () => openProps(p)});
+    if (canWrite) {
+      items.push({sep: true});
+      items.push({label: "删除…", key: "⌘⌫", fn: () => deletePaths([p])});
+    }
   }
 
   menu.innerHTML = items.map((it, i) => it.sep
@@ -1473,6 +1492,9 @@ function bindEvents() {
     else if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "c") { clipSet("copy"); }
     else if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "x") { clipSet("cut"); }
     else if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "v") { doPaste(); }
+    else if (ev.metaKey && ev.key === "Backspace") {
+      deletePaths([...S.selSet].map((n) => joinPath(S.path, n)));
+    }
     else if (ev.key === "F2" && S.selSet.size === 1) {
       startRename(entryByName([...S.selSet][0]));
     }

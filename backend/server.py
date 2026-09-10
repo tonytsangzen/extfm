@@ -76,6 +76,9 @@ class Bridge:
         lib.e2b_copy.argtypes = [ctypes.c_char_p, ctypes.c_char_p,
                                  ctypes.POINTER(ctypes.c_void_p)]
         lib.e2b_copy.restype = ctypes.c_int
+        lib.e2b_delete.argtypes = [ctypes.c_char_p, ctypes.c_int,
+                                   ctypes.POINTER(ctypes.c_void_p)]
+        lib.e2b_delete.restype = ctypes.c_int
         lib.e2b_free.argtypes = [ctypes.c_void_p]
         lib.e2b_free.restype = None
         lib.e2b_version.argtypes = []
@@ -142,6 +145,9 @@ class Bridge:
 
     def copy(self, old: str, new: str):
         self._err_call(self.lib.e2b_copy, os.fsencode(old), os.fsencode(new))
+
+    def delete(self, path: str):
+        self._err_call(self.lib.e2b_delete, os.fsencode(path), 1)
 
     def open(self, device: str, writable: bool = True) -> dict:
         fn = self.lib.e2b_open if writable else self.lib.e2b_open_ro
@@ -511,6 +517,8 @@ def do_flush() -> dict:
                 bridge.rename(op["old"], op["new"])
             elif op["op"] == "copy":
                 bridge.copy(op["old"], op["new"])
+            elif op["op"] == "delete":
+                bridge.delete(op["path"])
         except BridgeError as e:
             # 磁盘已应用 ops[0..i)：在当前磁盘状态上重建剩余操作的 overlay
             remaining = ops[i:]
@@ -946,6 +954,21 @@ class Handler(BaseHTTPRequestHandler):
             p.add_rename(path, new, meta)
             return finish({"path": new})
 
+        if route == "/api/delete":
+            paths = body.get("paths") or []
+            if not paths:
+                return self.send_error_json("缺少 paths 参数")
+            results = []
+            for src in paths:
+                norm = os.path.normpath(src)
+                if norm == "/":
+                    return self.send_error_json("不能删除根目录")
+                if not p.exists(norm, bridge):
+                    return self.send_error_json(f"源不存在: {src}", 404)
+                p.add_delete(norm)
+                results.append({"src": src})
+            return finish({"deleted": len(paths), "results": results})
+
         # copy / move
         paths, target = body.get("paths"), body.get("target")
         if not paths or not target:
@@ -1145,7 +1168,8 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/scan":
             return self.send_json({"ok": True, **scan_candidates()})
 
-        if route in ("/api/mkdir", "/api/rename", "/api/copy", "/api/move"):
+        if route in ("/api/mkdir", "/api/rename", "/api/copy", "/api/move",
+                     "/api/delete"):
             if not bridge.writable():
                 return self.send_error_json("当前文件系统不可写（只读方式打开）", 403)
             return self.handle_write(route)
